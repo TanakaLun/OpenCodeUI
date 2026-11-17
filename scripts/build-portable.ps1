@@ -7,7 +7,7 @@
     Produces a self-contained folder (and a .zip next to it):
 
         OpenCode/
-          OpenCode.exe        Tauri shell (portable feature compiled in)
+          OpenCodeUI.exe      Tauri shell (portable feature compiled in)
           opencode.exe        backend shipped from GitHub releases
           portable.txt        marker: portable mode is on
           README.txt
@@ -33,7 +33,9 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {
-    $appName = "OpenCode"
+    # NOTE: must not be "OpenCode" — NTFS is case-insensitive and the backend
+    # binary is opencode.exe, so OpenCode.exe would be the same file.
+    $appName = "OpenCodeUI"
     $packageDir = Join-Path $repoRoot (Join-Path $OutDir $appName)
 
     # ---------------------------------------------------------------- frontend
@@ -103,7 +105,7 @@ try {
 
     # --------------------------------------------------------------- portable
     @"
-Portable mode is enabled while this file exists next to OpenCode.exe.
+Portable mode is enabled while this file exists next to OpenCodeUI.exe.
 All data (settings, sessions, logs, WebView profile, opencode auth/config)
 is stored in the ./data folder.
 "@ | Set-Content -Path (Join-Path $packageDir "portable.txt") -Encoding UTF8
@@ -112,7 +114,7 @@ is stored in the ./data folder.
 OpenCodeUI portable
 ===================
 
-Run OpenCode.exe. Everything writable stays inside this folder:
+Run OpenCodeUI.exe. Everything writable stays inside this folder:
 
   data\config\     window state, WSL server list
   data\logs\       application logs
@@ -122,13 +124,24 @@ Run OpenCode.exe. Everything writable stays inside this folder:
 Requirements
 ------------
 * Windows 10/11 with the WebView2 runtime (preinstalled on up-to-date systems).
-* Keep the whole folder together; do not move OpenCode.exe out on its own.
+* Keep the whole folder together; do not move OpenCodeUI.exe out on its own.
 
 Updating
 --------
-Replace OpenCode.exe and opencode.exe with newer builds. The data folder and
+Replace OpenCodeUI.exe and opencode.exe with newer builds. The data folder and
 portable.txt can stay as they are. Deleting data\ resets the app.
 "@ | Set-Content -Path (Join-Path $packageDir "README.txt") -Encoding UTF8
+
+    # ------------------------------------------------------------------- check
+    # Guard against the NTFS case-insensitivity trap and half-done packages.
+    $shellExe = Join-Path $packageDir "$appName.exe"
+    $backendExe = Join-Path $packageDir "opencode.exe"
+    foreach ($required in @($shellExe, $backendExe)) {
+        if (-not (Test-Path $required)) { throw "missing $required in the portable package" }
+    }
+    if ((Get-Item $shellExe).Length -eq (Get-Item $backendExe).Length) {
+        throw "$appName.exe and opencode.exe are the same file (case-insensitive name clash)"
+    }
 
     # -------------------------------------------------------------------- zip
     $zipPath = Join-Path $repoRoot (Join-Path $OutDir "OpenCodeUI-portable-windows-x64.zip")

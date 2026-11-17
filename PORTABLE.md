@@ -1,6 +1,6 @@
 # 便携版（Portable）
 
-便携版把 **所有可写数据** 放在 `OpenCode.exe` 同级的 `data\` 目录里，不往
+便携版把 **所有可写数据** 放在 `OpenCodeUI.exe` 同级的 `data\` 目录里，不往
 `AppData` / `%LOCALAPPDATA%` / `~/.local` 写任何东西。整个文件夹可以放在 U 盘、
 移动硬盘或任意目录，拷走即迁移，删掉 `data\` 即恢复出厂。
 
@@ -30,8 +30,8 @@
 ## 产物结构
 
 ```
-OpenCode\
-├─ OpenCode.exe         Tauri 外壳（编译时带 portable feature）
+OpenCodeUI\
+├─ OpenCodeUI.exe       Tauri 外壳（编译时带 portable feature）
 ├─ opencode.exe         后端（从 opencode Releases 下载）
 ├─ portable.txt         便携模式标记
 ├─ README.txt
@@ -41,6 +41,9 @@ OpenCode\
    ├─ webview\
    └─ opencode\{data,config,state,cache}\
 ```
+
+> 外壳不能叫 `OpenCode.exe`：NTFS 大小写不敏感，`OpenCode.exe` 与后端的
+> `opencode.exe` 是同一个文件，后端会把外壳覆盖掉（第一版 CI 就踩了这个坑）。
 
 ## 构建
 
@@ -59,7 +62,7 @@ pwsh scripts/build-portable.ps1
 1. `tauri build --features portable --no-bundle`（不打安装包，只出 exe）；
 2. 从 `anomalyco/opencode` 最新 release 下载 `windows-x64` 后端并放进产物目录；
 3. 生成 `portable.txt` / `README.txt`；
-4. 输出 `dist-portable\OpenCode\` 和 `dist-portable\OpenCodeUI-portable-windows-x64.zip`。
+4. 输出 `dist-portable\OpenCodeUI\` 和 `dist-portable\OpenCodeUI-portable-windows-x64.zip`。
 
 可选参数：
 
@@ -111,7 +114,7 @@ pwsh scripts/build-portable.ps1 -SkipBackend
 - **WSL 模式不可便携**：WSL 里的 `opencode` 跑在 Linux 发行版内部，数据仍在
   WSL 的 `$HOME`。便携只覆盖本机（Local）后端。
 - opencode 的临时文件仍走 `%TEMP%`（`os.tmpdir()`），不影响配置持久化。
-- 更新时替换 `OpenCode.exe` 和 `opencode.exe` 即可，`data\` 不用动。
+- 更新时替换 `OpenCodeUI.exe` 和 `opencode.exe` 即可，`data\` 不用动。
 - Windows 之外的平台：代码同样生效（Linux 用 `APPIMAGE` 的所在目录作为基准，
   macOS 用 `.app/Contents/MacOS`），但只在 Windows 上做了打包脚本和验证。
 - 不要把整个目录放在网络共享（UNC，如 `\\server\share`）：WebView2 的用户数据
