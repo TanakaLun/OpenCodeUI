@@ -368,6 +368,8 @@ npm install
 npm run tauri build
 ```
 
+> **便携版（Windows）**：所有可写数据（设置、日志、WebView 配置、opencode 认证与会话）都保存在 `OpenCode.exe` 同级的 `data\` 目录，不写 `AppData`。构建方式和目录结构见 [PORTABLE.md](PORTABLE.md)。
+
 > **macOS 用户注意**：安装后如果打开提示"无法验证开发者"而移入废纸篓，请在终端执行以下命令移除隔离属性：
 >
 > ```bash

@@ -12,6 +12,12 @@ rust-version = "1.85.0"
 crate-type = ["cdylib", "rlib", "staticlib"]
 name = "app_lib"
 
+[features]
+default = []
+# Portable build: every writable artifact lives in `<exe dir>/data`.
+# See `src/app/portable.rs` and `PORTABLE.md`.
+portable = []
+
 [dependencies]
 futures-util = "0.3"
 log = "0.4"

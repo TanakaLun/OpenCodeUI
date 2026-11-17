@@ -1,0 +1,54 @@
+name: Portable (Windows)
+
+# Builds the portable Windows package: OpenCode.exe + opencode.exe +
+# portable.txt in one folder, with all data kept in ./data next to the exe.
+#
+# Run manually from the Actions tab, or let it run for `v*` tags.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build portable package
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/build-portable.ps1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenCodeUI-portable-windows-x64
+          path: dist-portable/OpenCodeUI-portable-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14

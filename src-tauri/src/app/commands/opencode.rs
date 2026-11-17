@@ -473,6 +473,11 @@ fn path_candidates(env_vars: &std::collections::HashMap<String, String>) -> Vec<
         }
     }
 
+    // Portable: the backend shipped next to the executable wins over PATH.
+    if let Some(bin) = crate::app::portable::backend_binary() {
+        candidates.push(bin);
+    }
+
     let Some(path) = patched_env_var(env_vars, "PATH") else {
         return candidates;
     };

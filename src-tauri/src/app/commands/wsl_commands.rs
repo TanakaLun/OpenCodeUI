@@ -27,7 +27,7 @@ struct PersistedServers {
 
 /// 从磁盘加载已保存的服务器配置
 fn load_persisted_servers(app: &AppHandle) -> Vec<WslServerConfig> {
-    let Some(dir) = app.path().app_config_dir().ok() else {
+    let Some(dir) = crate::app::app_config_dir(app) else {
         return Vec::new();
     };
     let path = dir.join(WSL_SERVERS_FILE);
@@ -41,10 +41,8 @@ fn load_persisted_servers(app: &AppHandle) -> Vec<WslServerConfig> {
 
 /// 将服务器配置持久化到磁盘
 fn persist_servers(app: &AppHandle, configs: &[WslServerConfig]) -> Result<(), String> {
-    let dir = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| format!("Failed to get config dir: {}", e))?;
+    let dir = crate::app::app_config_dir(app)
+        .ok_or_else(|| "Failed to get config dir".to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
     let data = PersistedServers {
@@ -90,14 +88,14 @@ struct OnlineCache {
 }
 
 fn load_online_cache(app: &AppHandle) -> Option<OnlineCache> {
-    let dir = app.path().app_config_dir().ok()?;
+    let dir = crate::app::app_config_dir(app)?;
     let data = std::fs::read_to_string(dir.join(WSL_ONLINE_CACHE_FILE)).ok()?;
     serde_json::from_str::<OnlineCache>(&data).ok()
 }
 
 /// 写缓存（尽力而为：失败只意味着下次仍要联网拉取，不影响本次结果）
 fn save_online_cache(app: &AppHandle, distros: &[WslOnlineDistro]) {
-    let Ok(dir) = app.path().app_config_dir() else {
+    let Some(dir) = crate::app::app_config_dir(app) else {
         return;
     };
     let _ = std::fs::create_dir_all(&dir);

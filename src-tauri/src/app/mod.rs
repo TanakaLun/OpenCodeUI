@@ -6,6 +6,8 @@ mod bridge;
 mod commands;
 #[cfg(not(target_os = "android"))]
 mod dir_state;
+#[cfg(not(target_os = "android"))]
+pub(crate) mod portable;
 mod service;
 
 use bridge::BridgeState;
@@ -36,9 +38,16 @@ struct SavedWindowState {
     fullscreen: bool,
 }
 
+/// Config directory for the app: `<exe>/data/config` in portable mode,
+/// the regular per-user app config directory otherwise.
+#[cfg(not(target_os = "android"))]
+pub(crate) fn app_config_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    portable::config_dir().or_else(|| app.path().app_config_dir().ok())
+}
+
 #[cfg(not(target_os = "android"))]
 fn window_state_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    let dir = app.path().app_config_dir().ok()?;
+    let dir = app_config_dir(app)?;
     Some(dir.join("window-state.json"))
 }
 
@@ -294,6 +303,13 @@ fn configure_desktop_window_builder<'a, R: tauri::Runtime, M: tauri::Manager<R>>
     // 窗口本身保持透明，是否真的透出桌面由前端决定（页面画不画底色）。
     let window_builder = window_builder.transparent(true);
 
+    // Portable: keep the WebView profile (localStorage / IndexedDB, i.e. all
+    // UI settings) next to the executable instead of AppData / XDG dirs.
+    let window_builder = match portable::webview_dir() {
+        Some(dir) => window_builder.data_directory(dir),
+        None => window_builder,
+    };
+
     // Windows：透明窗口如果没给背景色，WebView2 在窗口重新激活时会先出一帧
     // 默认白色底再补页面内容，看着就是闪一下白。这里给窗口表面一个深色底，
     // 只在 Windows 生效，不影响 macOS 的系统材质。
@@ -311,6 +327,11 @@ fn configure_desktop_window_builder<'a, R: tauri::Runtime, M: tauri::Manager<R>>
 }
 
 pub fn run() {
+    // Portable build: relocate every writable path next to the executable
+    // before Tauri (and the webview / opencode child) resolve their defaults.
+    #[cfg(not(target_os = "android"))]
+    portable::apply_process_env();
+
     let builder = tauri::Builder::default().manage(BridgeState::default());
 
     #[cfg(not(target_os = "android"))]
@@ -336,11 +357,21 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // 始终启用 log 插件，方便排查问题
-            app.handle().plugin(
-                tauri_plugin_log::Builder::default()
-                    .level(log::LevelFilter::Info)
-                    .build(),
-            )?;
+            let log_builder = tauri_plugin_log::Builder::default().level(log::LevelFilter::Info);
+
+            // Portable: write logs into `<exe>/data/logs` as well.
+            #[cfg(not(target_os = "android"))]
+            let log_builder = match portable::log_dir() {
+                Some(dir) => log_builder.clear_targets().target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::Folder {
+                        path: dir,
+                        file_name: Some("OpenCodeUI".into()),
+                    },
+                )),
+                None => log_builder,
+            };
+
+            app.handle().plugin(log_builder.build())?;
 
             #[cfg(not(target_os = "android"))]
             {
