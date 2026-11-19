@@ -80,27 +80,51 @@ jobs:
             echo "keyAlias=opencodeui"
             echo "password=opencodeui"
             echo "storeFile=$RUNNER_TEMP/keystore.jks"
-          } > src-tauri/gen/android/keystore.properties
+          } > src-tauri/gen/android/app/keystore.properties
 
       - name: Build arm64 APK
         run: |
           export NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
-          npx tauri android build --apk --target aarch64
+          npx tauri android build --apk --split-per-abi --target aarch64
 
-      - name: Collect and verify APK
+      - name: Collect, sign and verify APK
         run: |
           BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
-          APK=$(find src-tauri/gen/android/app/build/outputs/apk -path '*/release/*.apk' -type f | head -1)
+
+          # Prefer the arm64-split APK, fall back to whatever the build produced.
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -path '*/arm64/release/*.apk' -type f | head -1)
+          [ -z "$APK" ] && APK=$(find src-tauri/gen/android/app/build/outputs/apk -path '*/release/*.apk' -type f | head -1)
           if [ -z "$APK" ]; then
             echo "APK not found under src-tauri/gen/android/app/build/outputs/apk"
-            find src-tauri/gen/android/app/build/outputs -maxdepth 5 -type f | head -50
+            find src-tauri/gen/android/app/build/outputs -maxdepth 6 -type f | head -50
             exit 1
           fi
           echo "Built: $APK"
-          "$BT/apksigner" verify --print-certs "$APK"
+
           mkdir -p release-artifacts
-          cp "$APK" release-artifacts/OpenCodeUI-android-arm64.apk
+          OUT="release-artifacts/OpenCodeUI-android-arm64.apk"
+
+          # Gradle signing is easy to misconfigure; guarantee a sideloadable APK
+          # either way.
+          if "$BT/apksigner" verify "$APK"; then
+            cp "$APK" "$OUT"
+          else
+            "$BT/zipalign" -f -p 4 "$APK" "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" sign \
+              --ks "$RUNNER_TEMP/keystore.jks" \
+              --ks-key-alias opencodeui \
+              --ks-pass pass:opencodeui \
+              --key-pass pass:opencodeui \
+              --out "$OUT" "$RUNNER_TEMP/aligned.apk"
+          fi
+
+          "$BT/apksigner" verify --print-certs "$OUT"
           ls -lh release-artifacts
+
+      - name: Inspect APK
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$BT/aapt2" dump badging release-artifacts/OpenCodeUI-android-arm64.apk | head -5
 
       - uses: actions/upload-artifact@v7
         with:
