@@ -843,6 +843,8 @@ class ServerStore {
     const explicitUrl = updates.url ? updates.url.replace(/\/+$/, '') : undefined
     const nextUrl =
       explicitUrl ?? (hasEndpointsUpdate && nextEndpoints?.length ? nextEndpoints[0].url : server.url)
+    const hasAuthUpdate = Object.prototype.hasOwnProperty.call(updates, 'auth')
+    const nextAuth = hasAuthUpdate ? updates.auth : server.auth
     this.servers[index] = {
       ...server,
       ...updates,
@@ -858,6 +860,19 @@ class ServerStore {
     this.reconcileEndpointRuntime(id)
     this.saveToStorage()
     this.notify()
+    /**
+     * 地址 / 凭据变化必须广播：SSE 的 Authorization 在**建连时**就固定了，
+     * SDK 客户端也按 `baseUrl|user:password` 做缓存键。改了密码却只 notify()，
+     * 界面会一直用旧凭据重连失败，表现成「改完密码还是 401，必须刷新」。
+     * 这也是 Local 在 v2（强制密码）上最常见的一条失败路径。
+     */
+    if (
+      nextUrl !== server.url ||
+      !isSameServerAuth(server.auth, nextAuth) ||
+      !isSameEndpoints(server.endpoints, nextEndpoints)
+    ) {
+      this.notifyServerChange(id, 'server-runtime-updated')
+    }
     return true
   }
 

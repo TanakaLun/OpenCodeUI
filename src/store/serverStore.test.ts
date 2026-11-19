@@ -146,6 +146,40 @@ describe('serverStore local runtime URL', () => {
   })
 })
 
+describe('serverStore updateServer runtime changes', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    localStorage.clear()
+    sessionStorage.clear()
+  })
+
+  /**
+   * SSE 的 Authorization 在建连时固定，SDK 客户端按 `baseUrl|user:password`
+   * 做缓存键。凭据变了却不广播，界面会一直用旧凭据重连 —— 表现就是
+   * 「补完 Local 的密码还是 401，必须手动刷新」。
+   */
+  it('凭据变化广播 server-runtime-updated', async () => {
+    const { serverStore } = await import('./serverStore')
+    const listener = vi.fn()
+    serverStore.onServerChange(listener)
+
+    expect(serverStore.updateServer('local', { auth: { username: 'opencode', password: 'pw' } })).toBe(true)
+
+    expect(listener).toHaveBeenCalledWith('local', 'server-runtime-updated')
+    expect(serverStore.getServerAuth('local')?.password).toBe('pw')
+  })
+
+  it('只改名字不广播（避免无谓重连）', async () => {
+    const { serverStore } = await import('./serverStore')
+    const listener = vi.fn()
+    serverStore.onServerChange(listener)
+
+    serverStore.updateServer('local', { name: 'Local dev' })
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+})
+
 describe('serverStore WSL persistence', () => {
   beforeEach(() => {
     vi.resetModules()

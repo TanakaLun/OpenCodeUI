@@ -71,6 +71,54 @@ describe('ServersSettings', () => {
     expect(clearSessionMock).toHaveBeenCalledWith('session-1')
   })
 
+  /**
+   * opencode v2 的 serve 强制密码。Local 是内置默认条目，过去不渲染编辑按钮，
+   * 用户根本无处填写密码，Local 永远 401 —— 这条断言锁住入口不能再被隐藏。
+   */
+  it('默认 Local 条目可以编辑凭据，但不能删除', () => {
+    render(<ServersSettings />)
+
+    // local + remote 各有一个编辑按钮
+    expect(screen.getAllByTitle('servers.editServer')).toHaveLength(2)
+    // 只有非默认条目能删
+    expect(screen.getAllByTitle('common:remove')).toHaveLength(1)
+  })
+
+  it('Local 条目填写的密码会写回 auth', async () => {
+    const updateServerMock = vi.fn()
+    useServerStoreMock.mockReturnValue({
+      servers: [localServer],
+      activeServer: localServer,
+      addServer: vi.fn(),
+      removeServer: vi.fn(),
+      updateServer: updateServerMock,
+      setActiveServer: setActiveServerMock,
+      setActiveEndpoint: setActiveEndpointMock,
+      setLockedEndpoint: setLockedEndpointMock,
+      checkHealth: checkHealthMock,
+      checkAllHealth: vi.fn(),
+      getHealth: vi.fn(() => null),
+      endpointStates: new Map(),
+    })
+
+    render(<ServersSettings />)
+
+    fireEvent.click(screen.getByTitle('servers.editServer'))
+    fireEvent.click(await screen.findByText('servers.addAuth'))
+    fireEvent.change(screen.getByPlaceholderText('servers.passwordPlaceholder'), {
+      target: { value: 's3cret' },
+    })
+    fireEvent.click(screen.getByText('common:save'))
+
+    await waitFor(() => {
+      expect(updateServerMock).toHaveBeenCalledWith(
+        'local',
+        expect.objectContaining({ auth: { username: 'opencode', password: 's3cret' } }),
+      )
+    })
+    expect(checkHealthMock).toHaveBeenCalledWith('local')
+  })
+
   it('多地址服务器列全部地址，可手动「使用」与「锁定」（Issue #183）', async () => {
     const dualServer = {
       id: 'dual',

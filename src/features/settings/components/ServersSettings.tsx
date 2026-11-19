@@ -347,33 +347,36 @@ function ServerItem({
           >
             <QrCodeIcon size={13} />
           </button>
+          {/*
+            默认的 Local 条目也必须能编辑：opencode v2 的 serve 强制密码，
+            手动启动（或注册表里认领不到）的服务只能在这里补用户名/密码，
+            否则 Local 永远是 401、整个应用不可用。删除仍然只对非默认条目开放。
+          */}
+          <button
+            type="button"
+            className="p-1.5 rounded-md text-text-400 hover:text-accent-main-100 hover:bg-accent-main-100/10 transition-colors"
+            onClick={e => {
+              e.stopPropagation()
+              setEditing(true)
+            }}
+            title={t('servers.editServer')}
+            aria-label={t('servers.editServer')}
+          >
+            <PencilIcon size={13} />
+          </button>
           {!server.isDefault && (
-            <>
-              <button
-                type="button"
-                className="p-1.5 rounded-md text-text-400 hover:text-accent-main-100 hover:bg-accent-main-100/10 transition-colors"
-                onClick={e => {
-                  e.stopPropagation()
-                  setEditing(true)
-                }}
-                title={t('servers.editServer')}
-                aria-label={t('servers.editServer')}
-              >
-                <PencilIcon size={13} />
-              </button>
-              <button
-                type="button"
-                className="p-1.5 rounded-md text-text-400 hover:text-danger-100 hover:bg-danger-100/10 transition-colors"
-                onClick={e => {
-                  e.stopPropagation()
-                  setConfirmDelete(true)
-                }}
-                title={t('common:remove')}
-                aria-label={t('common:remove')}
-              >
-                <TrashIcon size={13} />
-              </button>
-            </>
+            <button
+              type="button"
+              className="p-1.5 rounded-md text-text-400 hover:text-danger-100 hover:bg-danger-100/10 transition-colors"
+              onClick={e => {
+                e.stopPropagation()
+                setConfirmDelete(true)
+              }}
+              title={t('common:remove')}
+              aria-label={t('common:remove')}
+            >
+              <TrashIcon size={13} />
+            </button>
           )}
         </div>
         </div>
