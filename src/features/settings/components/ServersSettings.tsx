@@ -15,6 +15,7 @@ import { PairServerDialog } from './PairServerDialog'
 import { PairScanDialog } from './PairScanDialog'
 import { PairLinkField } from './PairLinkField'
 import { usePairLinkRedeem } from './usePairLinkRedeem'
+import { LOCAL_SERVER_ID, serverStore } from '../../../store/serverStore'
 import type { ServerConfig, ServerEndpoint, ServerHealth, EndpointRuntime } from '../../../store/serverStore'
 import { isTauri, getDesktopPlatform } from '../../../utils/tauri'
 import { isLegacyPairingLink, parsePairingLink } from '../../../utils/pairing'
@@ -489,7 +490,18 @@ function EditServerForm({
   onCancel: () => void
 }) {
   const { t } = useTranslation(['settings', 'common'])
-  const [name, setName] = useState(server.name)
+  /**
+   * 编辑的是**持久化配置**，不是带运行时 override 的展示视图。
+   *
+   * local 条目的 `url` 在快照里会被替换成当次服务实际监听的地址（随机端口）。
+   * 直接把展示视图存回去会把 ephemeral 端口写进配置，下次启动服务没起来时
+   * 就指向一个死地址 —— 用户只是来补个密码，不该顺手改掉地址。
+   */
+  const editableConfig =
+    server.id === LOCAL_SERVER_ID
+      ? (serverStore.getStoredServers().find(item => item.id === server.id) ?? server)
+      : server
+  const [name, setName] = useState(editableConfig.name)
   /**
    * 地址列表（Issue #183）——**唯一的地址数据源**。
    *
@@ -498,12 +510,14 @@ function EditServerForm({
    */
   const [endpoints, setEndpoints] = useState<EditableEndpoint[]>(() =>
     toEditable(
-      server.endpoints?.length ? server.endpoints.map(endpoint => endpoint.url) : [server.url],
+      editableConfig.endpoints?.length
+        ? editableConfig.endpoints.map(endpoint => endpoint.url)
+        : [editableConfig.url],
     ),
   )
-  const [username, setUsername] = useState(server.auth?.username || '')
-  const [password, setPassword] = useState(server.auth?.password || '')
-  const [showAuth, setShowAuth] = useState(!!server.auth?.password)
+  const [username, setUsername] = useState(editableConfig.auth?.username || '')
+  const [password, setPassword] = useState(editableConfig.auth?.password || '')
+  const [showAuth, setShowAuth] = useState(!!editableConfig.auth?.password)
   const [error, setError] = useState('')
   // 主地址 = 列表第一个有效项（校验与 URL 警告都看它）
   const primaryUrl = collectEndpointUrls(endpoints)[0] ?? ''

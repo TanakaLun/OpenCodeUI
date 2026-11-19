@@ -119,6 +119,31 @@ describe('ServersSettings', () => {
     expect(checkHealthMock).toHaveBeenCalledWith('local')
   })
 
+  it('编辑 Local 时用的是持久化地址，不会把运行时端口写回配置', async () => {
+    // local 的快照 url 会被替换成当次服务监听的随机端口
+    const ephemeralLocal = { ...localServer, url: 'http://127.0.0.1:58231' }
+    useServerStoreMock.mockReturnValue({
+      servers: [ephemeralLocal],
+      activeServer: ephemeralLocal,
+      addServer: vi.fn(),
+      removeServer: vi.fn(),
+      updateServer: vi.fn(),
+      setActiveServer: setActiveServerMock,
+      setActiveEndpoint: setActiveEndpointMock,
+      setLockedEndpoint: setLockedEndpointMock,
+      checkHealth: checkHealthMock,
+      checkAllHealth: vi.fn(),
+      getHealth: vi.fn(() => null),
+      endpointStates: new Map(),
+    })
+
+    render(<ServersSettings />)
+    fireEvent.click(screen.getByTitle('servers.editServer'))
+
+    expect(screen.getByDisplayValue('http://127.0.0.1:4096')).toBeTruthy()
+    expect(screen.queryByDisplayValue('http://127.0.0.1:58231')).toBeNull()
+  })
+
   it('多地址服务器列全部地址，可手动「使用」与「锁定」（Issue #183）', async () => {
     const dualServer = {
       id: 'dual',
