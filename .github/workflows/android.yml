@@ -1,0 +1,110 @@
+name: Android (arm64 APK)
+
+# Builds a sideloadable arm64 APK without any repository secrets:
+# a throwaway keystore is generated on the runner and the APK is signed with it.
+#
+# Run manually from the Actions tab, or on `v*` tags.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-arm64:
+    runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: 29.0.14206865
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # android-actions/setup-android's default "tools" package no longer
+      # exists in the SDK repository; only platform-tools is needed here.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Install NDK ${{ env.NDK_VERSION }}
+        run: sdkmanager "ndk;$NDK_VERSION"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          key: android-arm64
+
+      - name: Gradle cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            src-tauri/gen/android/.gradle
+          key: gradle-arm64-${{ hashFiles('src-tauri/gen/android/**/*.gradle*', 'src-tauri/gen/android/**/gradle-wrapper.properties') }}
+          restore-keys: gradle-arm64-
+
+      - run: npm ci
+
+      - name: Generate throwaway signing key
+        run: |
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/keystore.jks" \
+            -alias opencodeui \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass opencodeui -keypass opencodeui \
+            -dname "CN=OpenCodeUI, OU=Portable, O=OpenCodeUI, L=NA, ST=NA, C=NA"
+          {
+            echo "keyAlias=opencodeui"
+            echo "password=opencodeui"
+            echo "storeFile=$RUNNER_TEMP/keystore.jks"
+          } > src-tauri/gen/android/keystore.properties
+
+      - name: Build arm64 APK
+        run: |
+          export NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
+          npx tauri android build --apk --target aarch64
+
+      - name: Collect and verify APK
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -path '*/release/*.apk' -type f | head -1)
+          if [ -z "$APK" ]; then
+            echo "APK not found under src-tauri/gen/android/app/build/outputs/apk"
+            find src-tauri/gen/android/app/build/outputs -maxdepth 5 -type f | head -50
+            exit 1
+          fi
+          echo "Built: $APK"
+          "$BT/apksigner" verify --print-certs "$APK"
+          mkdir -p release-artifacts
+          cp "$APK" release-artifacts/OpenCodeUI-android-arm64.apk
+          ls -lh release-artifacts
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenCodeUI-android-arm64
+          path: release-artifacts/OpenCodeUI-android-arm64.apk
+          if-no-files-found: error
+          retention-days: 14
